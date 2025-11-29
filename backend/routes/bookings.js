@@ -137,9 +137,13 @@ router.post('/', requireAuth, async (req, res) => {
       });
     }
     
-    // Check if event is still active
+    // Check if event is still active and get full event details
     const eventResult = await client.query(
-      'SELECT status, start_date, title FROM events WHERE event_id = $1',
+      `SELECT e.event_id, e.status, e.start_date, e.end_date, e.title, e.description,
+              v.name as venue_name, v.address as venue_address, v.city as venue_city
+       FROM events e
+       JOIN venues v ON e.venue_id = v.venue_id
+       WHERE e.event_id = $1`,
       [event_id]
     );
     
@@ -219,41 +223,144 @@ router.post('/', requireAuth, async (req, res) => {
     
     await client.query('COMMIT');
     
-    // Send booking confirmation email
+    // Send ticket purchase confirmation email with complete event details
     try {
-      const ticketDetails = ticketInstances.map((ti, idx) => {
-        const correspondingItem = items.find((item, itemIdx) => {
-          // Find which category this ticket belongs to
-          const ticketCategory = ticketInstances.slice(0, idx).reduce((acc, curr, i) => {
-            if (i === idx) return acc;
-            return acc;
-          }, 0);
-          return true; // We'll get category from the ticket_id query
-        });
-        
-        return {
-          ticket_id: ti.ticket_id,
-          category: items[Math.floor(idx / (ticketInstances.length / items.length))].category,
-          quantity: 1,
-          price: ti.price
-        };
+      const userEmail = req.session.user.email;
+      const userName = req.session.user.name;
+      const event = eventResult.rows[0];
+      
+      const eventStartDate = new Date(event.start_date).toLocaleString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit'
       });
       
-      await sendBookingConfirmation({
-        userEmail: req.session.user.email,
-        userName: req.session.user.name,
-        bookingId: booking.booking_id,
-        eventTitle: eventResult.rows[0].title,
-        eventDate: eventResult.rows[0].start_date,
-        tickets: ticketInstances.map(ti => ({
-          ticket_id: ti.ticket_id,
-          price: ti.price
-        })),
-        totalAmount: totalAmount,
-        paymentMethod: payment_method
+      const eventEndDate = new Date(event.end_date).toLocaleString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit'
       });
+      
+      const bookingDate = new Date(booking.booking_date).toLocaleString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit'
+      });
+      
+      const venueFullAddress = `${event.venue_name}, ${event.venue_address}, ${event.venue_city}`;
+      
+      if (userEmail) {
+        // Build detailed ticket list with ticket IDs
+        const ticketDetailsText = ticketInstances.map((ticket, idx) => {
+          const item = items.find(i => i.category === items[Math.floor(idx / (ticketInstances.length / items.length))].category);
+          return `  • Ticket ID: ${ticket.ticket_id} | Category: ${items[Math.floor(idx / (ticketInstances.length / items.length))].category} | Price: $${ticket.price.toFixed(2)}`;
+        }).join('\n');
+        
+        const ticketDetailsHtml = ticketInstances.map((ticket, idx) => {
+          return `<tr style="border-bottom: 1px solid #E5E7EB;">
+            <td style="padding: 8px;">${ticket.ticket_id}</td>
+            <td style="padding: 8px;">${items[Math.floor(idx / (ticketInstances.length / items.length))].category}</td>
+            <td style="padding: 8px; text-align: right;">$${ticket.price.toFixed(2)}</td>
+          </tr>`;
+        }).join('');
+        
+        const emailService = require('../services/emailService');
+        await emailService.sendEmail({
+          to: userEmail,
+          from: process.env.EMAIL_FROM || 'eventhub@gmail.com',
+          subject: `🎫 Tickets Confirmed for ${event.title}`,
+          text: `Hello ${userName},\n\nYour tickets for "${event.title}" have been successfully booked!\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nBOOKING CONFIRMATION\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nBooking Number: #${booking.booking_id}\nBooking Date: ${bookingDate}\nPayment Method: ${payment_method.toUpperCase()}\nPayment Status: CONFIRMED\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nEVENT DETAILS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nEvent: ${event.title}\n\nDate & Time:\n  Start: ${eventStartDate}\n  End: ${eventEndDate}\n\nVenue:\n  ${venueFullAddress}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nYOUR TICKETS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ticketDetailsText}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nPAYMENT SUMMARY\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nTotal Tickets: ${ticketInstances.length}\nTotal Amount Paid: $${totalAmount.toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📱 IMPORTANT INSTRUCTIONS:\n\n1. Save this email for your records\n2. Present Booking ID #${booking.booking_id} at venue entrance\n3. Arrive 30 minutes before event start time\n4. Bring valid photo ID for verification\n\nNeed help? Contact us at support@eventhub.com\n\nSee you at the event! 🎉\n\nBest regards,\nThe EventHub Team`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #ffffff;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white;">
+                <h1 style="margin: 0; font-size: 28px;">🎫 Booking Confirmed!</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Your tickets are ready</p>
+              </div>
+              
+              <div style="padding: 30px;">
+                <p style="font-size: 16px; color: #333;">Hello <strong>${userName}</strong>,</p>
+                <p style="font-size: 16px; color: #333;">Your tickets for <strong>"${event.title}"</strong> have been successfully booked!</p>
+                
+                <!-- Booking Confirmation -->
+                <div style="background-color: #F9FAFB; border-left: 4px solid #10B981; padding: 20px; margin: 25px 0; border-radius: 4px;">
+                  <h3 style="margin: 0 0 15px 0; color: #10B981; font-size: 18px;">✅ Booking Confirmation</h3>
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px 0; color: #6B7280; width: 180px;"><strong>Booking Number:</strong></td><td style="padding: 8px 0; color: #111827; font-weight: bold;">#${booking.booking_id}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6B7280;"><strong>Booking Date:</strong></td><td style="padding: 8px 0; color: #111827;">${bookingDate}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6B7280;"><strong>Payment Method:</strong></td><td style="padding: 8px 0; color: #111827;">${payment_method.toUpperCase()}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6B7280;"><strong>Payment Status:</strong></td><td style="padding: 8px 0;"><span style="background-color: #D1FAE5; color: #065F46; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: bold;">CONFIRMED</span></td></tr>
+                  </table>
+                </div>
+                
+                <!-- Event Details -->
+                <div style="background-color: #EEF2FF; border-left: 4px solid #4F46E5; padding: 20px; margin: 25px 0; border-radius: 4px;">
+                  <h3 style="margin: 0 0 15px 0; color: #4F46E5; font-size: 18px;">📅 Event Details</h3>
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px 0; color: #6B7280; width: 180px;"><strong>Event Name:</strong></td><td style="padding: 8px 0; color: #111827; font-weight: bold;">${event.title}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6B7280; vertical-align: top;"><strong>Start Date & Time:</strong></td><td style="padding: 8px 0; color: #111827;">${eventStartDate}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6B7280; vertical-align: top;"><strong>End Date & Time:</strong></td><td style="padding: 8px 0; color: #111827;">${eventEndDate}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6B7280; vertical-align: top;"><strong>Venue:</strong></td><td style="padding: 8px 0; color: #111827;">${event.venue_name}<br>${event.venue_address}<br>${event.venue_city}</td></tr>
+                  </table>
+                </div>
+                
+                <!-- Ticket Details -->
+                <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; margin: 25px 0; border-radius: 4px;">
+                  <h3 style="margin: 0 0 15px 0; color: #D97706; font-size: 18px;">🎟️ Your Tickets</h3>
+                  <table style="width: 100%; border-collapse: collapse; background-color: white; border-radius: 4px; overflow: hidden;">
+                    <thead>
+                      <tr style="background-color: #F59E0B; color: white;">
+                        <th style="padding: 12px; text-align: left;">Ticket ID</th>
+                        <th style="padding: 12px; text-align: left;">Category</th>
+                        <th style="padding: 12px; text-align: right;">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${ticketDetailsHtml}
+                    </tbody>
+                    <tfoot>
+                      <tr style="background-color: #FEF3C7; font-weight: bold; font-size: 16px;">
+                        <td colspan="2" style="padding: 15px; text-align: left;">Total (${ticketInstances.length} ticket${ticketInstances.length > 1 ? 's' : ''})</td>
+                        <td style="padding: 15px; text-align: right; color: #D97706;">$${totalAmount.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                
+                <!-- Important Instructions -->
+                <div style="background-color: #DBEAFE; border: 2px solid #3B82F6; padding: 20px; margin: 25px 0; border-radius: 8px;">
+                  <h3 style="margin: 0 0 15px 0; color: #1E40AF; font-size: 18px;">📱 Important Instructions</h3>
+                  <ul style="margin: 0; padding-left: 20px; color: #1F2937; line-height: 1.8;">
+                    <li>Save this email for your records</li>
+                    <li>Present <strong>Booking ID #${booking.booking_id}</strong> at venue entrance</li>
+                    <li>Arrive <strong>30 minutes</strong> before event start time</li>
+                    <li>Bring valid <strong>photo ID</strong> for verification</li>
+                    <li>Each ticket holder must present their individual Ticket ID</li>
+                  </ul>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <p style="font-size: 20px; color: #10B981; font-weight: bold; margin: 0;">See you at the event! 🎉</p>
+                </div>
+                
+                <div style="border-top: 2px solid #E5E7EB; padding-top: 20px; margin-top: 30px; text-align: center; color: #6B7280; font-size: 14px;">
+                  <p style="margin: 5px 0;">Need help? Contact us at <a href="mailto:support@eventhub.com" style="color: #4F46E5; text-decoration: none;">support@eventhub.com</a></p>
+                  <p style="margin: 15px 0 5px 0;">Best regards,<br><strong style="color: #111827;">The EventHub Team</strong></p>
+                </div>
+              </div>
+            </div>
+          `
+        });
+      }
     } catch (emailError) {
-      console.error('Failed to send booking confirmation email:', emailError);
+      console.error('Failed to send ticket purchase confirmation email:', emailError);
       // Don't fail the booking if email fails
     }
     

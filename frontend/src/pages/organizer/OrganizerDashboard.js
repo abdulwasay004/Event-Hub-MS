@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { organizerAPI } from '../../services/api';
+import { organizerAPI, eventsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 const OrganizerDashboard = () => {
@@ -20,8 +20,20 @@ const OrganizerDashboard = () => {
   };
 
   const handleEditEvent = (eventId) => {
-    // For now, redirect to view - you can create an edit page later
-    navigate(`/events/${eventId}`);
+    navigate(`/edit-event/${eventId}`);
+  };
+
+  const handleDeleteEvent = async (eventId, eventTitle) => {
+    if (window.confirm(`Are you sure you want to delete "${eventTitle}"? This action cannot be undone.`)) {
+      try {
+        await eventsAPI.delete(eventId);
+        alert('Event deleted successfully');
+        fetchDashboardData(); // Refresh the data
+      } catch (error) {
+        alert(error.response?.data?.message || 'Failed to delete event');
+        console.error('Delete event error:', error);
+      }
+    }
   };
 
   const handleViewAttendees = (eventId) => {
@@ -299,24 +311,34 @@ const OrganizerDashboard = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-3">
                           <button 
                             onClick={() => handleViewEvent(event.event_id)}
                             className="text-primary-600 hover:text-primary-900"
+                            title="View Event"
                           >
                             View
                           </button>
                           <button 
                             onClick={() => handleEditEvent(event.event_id)}
                             className="text-indigo-600 hover:text-indigo-900"
+                            title="Edit Event"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => handleViewAttendees(event.event_id)}
                             className="text-green-600 hover:text-green-900"
+                            title="View Attendees"
                           >
                             Attendees
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteEvent(event.event_id, event.title)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Delete Event"
+                          >
+                            Delete
                           </button>
                         </div>
                       </td>

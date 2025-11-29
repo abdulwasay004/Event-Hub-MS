@@ -304,18 +304,26 @@ const EventDetail = () => {
                       {event.tickets.map(ticket => (
                         <div
                           key={ticket.ticket_id}
-                          className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                            selectedTicket?.ticket_id === ticket.ticket_id
-                              ? 'border-primary-500 bg-primary-50'
-                              : 'border-gray-300 hover:border-gray-400'
+                          className={`border rounded-lg p-3 transition-colors ${
+                            ticket.available_quantity === 0
+                              ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                              : selectedTicket?.ticket_id === ticket.ticket_id
+                              ? 'border-primary-500 bg-primary-50 cursor-pointer'
+                              : 'border-gray-300 hover:border-gray-400 cursor-pointer'
                           }`}
-                          onClick={() => setSelectedTicket(ticket)}
+                          onClick={() => ticket.available_quantity > 0 && setSelectedTicket(ticket)}
                         >
                           <div className="flex justify-between items-center">
                             <div>
                               <div className="font-medium">{ticket.category}</div>
-                              <div className="text-sm text-gray-600">
-                                {ticket.available_quantity} available
+                              <div className="text-sm">
+                                {ticket.available_quantity > 0 ? (
+                                  <span className="text-green-600 font-medium">
+                                    {ticket.available_quantity} ticket{ticket.available_quantity !== 1 ? 's' : ''} available
+                                  </span>
+                                ) : (
+                                  <span className="text-red-600 font-semibold">Sold Out</span>
+                                )}
                               </div>
                             </div>
                             <div className="text-lg font-semibold text-green-600">

@@ -2,6 +2,8 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const pool = require('../config/database');
 const { requireAuth } = require('../middleware/auth');
+const emailService = require('../services/emailService'); 
+
 
 const router = express.Router();
 
@@ -45,6 +47,35 @@ router.post('/register', async (req, res) => {
     
     // Create session
     req.session.user = user;
+
+    // send welcome email (best-effort, won't block response)
+    if (user && user.email) {
+      emailService.sendEmail({
+        to: user.email,
+        from: process.env.EMAIL_FROM || 'eventhub@gmail.com',
+        subject: '🎉 Welcome to EventHub!',
+        text: `Hello ${user.name},\n\nWelcome to EventHub!\n\nYour account has been successfully created. You can now:\n• Browse and discover exciting events\n• Book tickets for your favorite events\n• Create and manage your own events (as an organizer)\n• Track your bookings and event history\n\nThank you for joining our community!\n\nBest regards,\nThe EventHub Team`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #4F46E5;">🎉 Welcome to EventHub!</h2>
+            <p>Hello <strong>${user.name}</strong>,</p>
+            <p>Your account has been successfully created.</p>
+            <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="margin-top: 0;">What you can do now:</h3>
+              <ul style="line-height: 1.8;">
+                <li>Browse and discover exciting events</li>
+                <li>Book tickets for your favorite events</li>
+                <li>Create and manage your own events (as an organizer)</li>
+                <li>Track your bookings and event history</li>
+              </ul>
+            </div>
+            <p>Thank you for joining our community!</p>
+            <p style="margin-top: 30px;">Best regards,<br><strong>The EventHub Team</strong></p>
+          </div>
+        `
+      }).catch(err => console.error('Welcome email error:', err));
+    }
+    
     
     res.status(201).json({ 
       success: true, 
@@ -101,6 +132,18 @@ router.post('/login', async (req, res) => {
     
     // Create session
     req.session.user = user;
+
+    
+    // send sign-in notification (best-effort)
+    if (user && user.email) {
+      emailService.sendEmail({
+        to: user.email,
+        from: 'eventhub@gmail.com',
+        subject: 'Sign-in to EventHub',
+        text: `Hello ${user.name || ''},\n\nYou have just signed in to EventHub. If this wasn't you, please secure your account.`
+      }).catch(err => console.error('Sign-in email error:', err));
+    }
+    
     
     res.json({ 
       success: true, 

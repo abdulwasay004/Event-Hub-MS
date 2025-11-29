@@ -154,11 +154,19 @@ const Events = () => {
             {sortedEvents.map(event => (
               <div key={event.event_id} className="card hover:shadow-lg transition-shadow duration-200">
                 <div className="aspect-w-16 aspect-h-9 mb-4">
-                  <div className="w-full h-48 bg-gradient-to-r from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
-                    <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m0 0V7a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2m8 0V9a2 2 0 00-2-2H8a2 2 0 00-2 2v6a2 2 0 002 2h8a2 2 0 002-2V9z" />
-                    </svg>
-                  </div>
+                  {event.cover_image ? (
+                    <img
+                      src={event.cover_image}
+                      alt={event.title}
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-full h-48 bg-gradient-to-r from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
+                      <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m0 0V7a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2m8 0V9a2 2 0 00-2-2H8a2 2 0 00-2 2v6a2 2 0 002 2h8a2 2 0 002-2V9z" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex-1">

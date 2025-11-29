@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+// import { useAuth } from '../../context/AuthContext';
 import { eventsAPI } from '../../services/api';
 
 const CreateEvent = () => {
-  const { user } = useAuth();
+  // const { } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     start_date: '',
     end_date: '',
     venue_id: '',
-    capacity: '',
-    ticket_price: '',
     category_id: '',
     status: 'active'
   });
+  const [ticketTypes, setTicketTypes] = useState([
+    { category: 'General', price: '', max_quantity: '' }
+  ]);
+  const [coverImage, setCoverImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [venues, setVenues] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -56,6 +59,59 @@ const CreateEvent = () => {
     }));
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file size (max 2MB)
+      const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+      if (file.size > maxSize) {
+        setError('Image size must be less than 2MB');
+        e.target.value = null;
+        return;
+      }
+
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setError('Please upload a valid image file (JPEG, PNG, or WebP)');
+        e.target.value = null;
+        return;
+      }
+
+      // Convert to base64 for preview and storage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImage(reader.result);
+        setImagePreview(reader.result);
+        setError('');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setCoverImage(null);
+    setImagePreview(null);
+    const fileInput = document.getElementById('cover-image');
+    if (fileInput) fileInput.value = null;
+  };
+
+  const handleTicketChange = (index, field, value) => {
+    const newTicketTypes = [...ticketTypes];
+    newTicketTypes[index][field] = value;
+    setTicketTypes(newTicketTypes);
+  };
+
+  const addTicketType = () => {
+    setTicketTypes([...ticketTypes, { category: '', price: '', max_quantity: '' }]);
+  };
+
+  const removeTicketType = (index) => {
+    if (ticketTypes.length > 1) {
+      setTicketTypes(ticketTypes.filter((_, i) => i !== index));
+    }
+  };
+
   const validateForm = () => {
     if (!formData.title.trim()) {
       setError('Event title is required');
@@ -81,17 +137,29 @@ const CreateEvent = () => {
       setError('Please select a venue');
       return false;
     }
-    if (!formData.capacity || formData.capacity < 1) {
-      setError('Please enter a valid capacity');
-      return false;
-    }
-    if (!formData.ticket_price || formData.ticket_price < 0) {
-      setError('Please enter a valid ticket price');
-      return false;
-    }
     if (!formData.category_id) {
       setError('Please select a category');
       return false;
+    }
+    // Validate ticket types
+    if (ticketTypes.length === 0) {
+      setError('Please add at least one ticket type');
+      return false;
+    }
+    for (let i = 0; i < ticketTypes.length; i++) {
+      const ticket = ticketTypes[i];
+      if (!ticket.category.trim()) {
+        setError(`Ticket type ${i + 1}: Category is required`);
+        return false;
+      }
+      if (!ticket.price || parseFloat(ticket.price) < 0) {
+        setError(`Ticket type ${i + 1}: Valid price is required`);
+        return false;
+      }
+      if (!ticket.max_quantity || parseInt(ticket.max_quantity) < 1) {
+        setError(`Ticket type ${i + 1}: Valid quantity is required`);
+        return false;
+      }
     }
     return true;
   };
@@ -110,10 +178,14 @@ const CreateEvent = () => {
     try {
       const eventData = {
         ...formData,
-        capacity: parseInt(formData.capacity),
-        ticket_price: parseFloat(formData.ticket_price),
         venue_id: parseInt(formData.venue_id),
-        category_id: parseInt(formData.category_id)
+        category_id: parseInt(formData.category_id),
+        cover_image: coverImage || null,
+        tickets: ticketTypes.map(ticket => ({
+          category: ticket.category,
+          price: parseFloat(ticket.price),
+          max_quantity: parseInt(ticket.max_quantity)
+        }))
       };
 
       await eventsAPI.create(eventData);
@@ -126,22 +198,18 @@ const CreateEvent = () => {
         start_date: '',
         end_date: '',
         venue_id: '',
-        capacity: '',
-        ticket_price: '',
         category_id: '',
         status: 'active'
       });
+      setTicketTypes([{ category: 'General', price: '', max_quantity: '' }]);
+      setCoverImage(null);
+      setImagePreview(null);
 
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to create event');
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDateForInput = (date) => {
-    if (!date) return '';
-    return new Date(date).toISOString().slice(0, 16);
   };
 
   return (
@@ -198,6 +266,69 @@ const CreateEvent = () => {
                   placeholder="Describe your event..."
                   required
                 />
+              </div>
+
+              {/* Cover Image Upload */}
+              <div>
+                <label htmlFor="cover-image" className="block text-sm font-medium text-gray-700 mb-2">
+                  Cover Image (Max 2MB)
+                </label>
+                <div className="mt-1">
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Cover preview"
+                        className="w-full h-48 object-cover rounded-lg border-2 border-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-primary-400 transition-colors">
+                      <div className="space-y-1 text-center">
+                        <svg
+                          className="mx-auto h-12 w-12 text-gray-400"
+                          stroke="currentColor"
+                          fill="none"
+                          viewBox="0 0 48 48"
+                        >
+                          <path
+                            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <div className="flex text-sm text-gray-600">
+                          <label
+                            htmlFor="cover-image"
+                            className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none"
+                          >
+                            <span>Upload a file</span>
+                            <input
+                              id="cover-image"
+                              name="cover-image"
+                              type="file"
+                              accept="image/jpeg,image/jpg,image/png,image/webp"
+                              onChange={handleImageChange}
+                              className="sr-only"
+                            />
+                          </label>
+                          <p className="pl-1">or drag and drop</p>
+                        </div>
+                        <p className="text-xs text-gray-500">PNG, JPG, WEBP up to 2MB</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -279,41 +410,85 @@ const CreateEvent = () => {
               </div>
             </div>
 
-            {/* Capacity and Pricing */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="capacity" className="block text-sm font-medium text-gray-700 mb-2">
-                  Event Capacity *
+            {/* Ticket Types */}
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Ticket Types *
                 </label>
-                <input
-                  type="number"
-                  id="capacity"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="Maximum number of attendees"
-                  min="1"
-                  required
-                />
+                <button
+                  type="button"
+                  onClick={addTicketType}
+                  className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center"
+                >
+                  <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Add Ticket Type
+                </button>
               </div>
-
-              <div>
-                <label htmlFor="ticket_price" className="block text-sm font-medium text-gray-700 mb-2">
-                  Ticket Price ($) *
-                </label>
-                <input
-                  type="number"
-                  id="ticket_price"
-                  name="ticket_price"
-                  value={formData.ticket_price}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  required
-                />
+              
+              <div className="space-y-4">
+                {ticketTypes.map((ticket, index) => (
+                  <div key={index} className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium text-gray-700">Ticket Type {index + 1}</h4>
+                      {ticketTypes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeTicketType(index)}
+                          className="text-red-600 hover:text-red-700 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Category Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={ticket.category}
+                          onChange={(e) => handleTicketChange(index, 'category', e.target.value)}
+                          className="input-field"
+                          placeholder="e.g., VIP, General, Student"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Price ($) *
+                        </label>
+                        <input
+                          type="number"
+                          value={ticket.price}
+                          onChange={(e) => handleTicketChange(index, 'price', e.target.value)}
+                          className="input-field"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Max Quantity *
+                        </label>
+                        <input
+                          type="number"
+                          value={ticket.max_quantity}
+                          onChange={(e) => handleTicketChange(index, 'max_quantity', e.target.value)}
+                          className="input-field"
+                          placeholder="100"
+                          min="1"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 

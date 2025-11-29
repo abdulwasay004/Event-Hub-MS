@@ -1,20 +1,95 @@
 const nodemailer = require('nodemailer');
 
 // Create reusable transporter
-// For development, using Gmail. In production, use a proper email service
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASSWORD || 'your-app-password'
-  }
-});
+let transporter;
 
-// If email credentials are not set, use ethereal for testing
-if (!process.env.EMAIL_USER) {
-  console.log('⚠️  Email credentials not set. Using console logging instead.');
-  console.log('💡 Set EMAIL_USER and EMAIL_PASSWORD in .env for actual email sending.');
+// Initialize transporter with Ethereal (test email service)
+async function createEtherealTransporter() {
+  try {
+    const testAccount = await nodemailer.createTestAccount();
+    
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass
+      }
+    });
+    
+    console.log('📧 Using Ethereal test email service');
+    console.log('📧 Test email account:', testAccount.user);
+    console.log('💡 View sent emails at: https://ethereal.email/messages');
+    
+    return transporter;
+  } catch (error) {
+    console.error('Failed to create Ethereal account:', error.message);
+    return null;
+  }
 }
+
+// For production with real Gmail
+function createGmailTransporter() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    }
+  });
+}
+
+// Initialize transporter based on environment
+if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+  transporter = createGmailTransporter();
+  console.log('📧 Using Gmail email service: ' + process.env.EMAIL_USER);
+} else {
+  console.log('⚠️  Gmail credentials not configured. Using Ethereal test service...');
+  createEtherealTransporter().then(t => {
+    if (t) transporter = t;
+  });
+}
+
+const sendEmail = async ({ to, from, subject, text, html }) => {
+  const mailOptions = {
+    from: from || process.env.EMAIL_USER || 'eventhub@gmail.com',
+    to,
+    subject,
+    text,
+    html
+  };
+
+  try {
+    // Wait for transporter to be initialized
+    if (!transporter) {
+      transporter = await createEtherealTransporter();
+    }
+    
+    if (!transporter) {
+      console.log('\n📧 ===== EMAIL (No Transporter Available) =====');
+      console.log('From:', mailOptions.from);
+      console.log('To:', mailOptions.to);
+      console.log('Subject:', mailOptions.subject);
+      console.log('================================================\n');
+      return { success: false, message: 'Email transporter not available' };
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent:', info.messageId);
+    
+    // For Ethereal, provide preview URL
+    if (info.messageId && nodemailer.getTestMessageUrl(info)) {
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      console.log('📧 Preview email: ' + previewUrl);
+    }
+    
+    return { success: true, messageId: info.messageId, previewUrl: nodemailer.getTestMessageUrl(info) };
+  } catch (error) {
+    console.error('❌ Email send error:', error.message);
+    return { success: false, error: error.message };
+  }
+};
 
 /**
  * Send booking confirmation email
@@ -155,5 +230,6 @@ EventHub - Your Gateway to Amazing Events
 };
 
 module.exports = {
-  sendBookingConfirmation
+  sendBookingConfirmation,
+  sendEmail
 };

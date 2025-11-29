@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/database');
 const { requireAuth, requireUserOrAdmin } = require('../middleware/auth');
+const emailService = require('../services/emailService'); 
 
 const router = express.Router();
 
@@ -19,6 +20,7 @@ router.get('/', async (req, res) => {
         e.end_date,
         e.status,
         e.created_at,
+        e.cover_image,
         u.name as organizer_name,
         v.name as venue_name,
         v.city as venue_city,
@@ -69,16 +71,18 @@ router.get('/', async (req, res) => {
     
     // Enhance each event with ticket and review data
     const enhancedEvents = await Promise.all(baseResult.rows.map(async (event) => {
-      // Get ticket data with sold quantity calculated from tickets table
+      // Get ticket data with sold quantity calculated from confirmed bookings only
       const ticketResult = await pool.query(`
         SELECT 
           tt.category,
           tt.price,
           tt.max_quantity,
-          COUNT(t.ticket_id)::integer as sold_quantity,
-          (tt.max_quantity - COUNT(t.ticket_id))::integer as available_quantity
+          COUNT(CASE WHEN b.status = 'confirmed' THEN t.ticket_id END)::integer as sold_quantity,
+          (tt.max_quantity - COUNT(CASE WHEN b.status = 'confirmed' THEN t.ticket_id END))::integer as available_quantity
         FROM ticket_types tt
         LEFT JOIN tickets t ON tt.event_id = t.event_id AND tt.category = t.category
+        LEFT JOIN booking_items bi ON t.ticket_id = bi.ticket_id
+        LEFT JOIN bookings b ON bi.booking_id = b.booking_id
         WHERE tt.event_id = $1
         GROUP BY tt.event_id, tt.category, tt.price, tt.max_quantity
         ORDER BY tt.price ASC
@@ -154,16 +158,18 @@ router.get('/:id', async (req, res) => {
       });
     }
     
-    // Get ticket types for this event with sold count
+    // Get ticket types for this event with sold count from confirmed bookings only
     const ticketsResult = await pool.query(`
       SELECT 
         tt.category,
         tt.price,
         tt.max_quantity,
-        COUNT(t.ticket_id)::integer as sold_quantity,
-        (tt.max_quantity - COUNT(t.ticket_id))::integer as available_quantity
+        COUNT(CASE WHEN b.status = 'confirmed' THEN t.ticket_id END)::integer as sold_quantity,
+        (tt.max_quantity - COUNT(CASE WHEN b.status = 'confirmed' THEN t.ticket_id END))::integer as available_quantity
       FROM ticket_types tt
       LEFT JOIN tickets t ON tt.event_id = t.event_id AND tt.category = t.category
+      LEFT JOIN booking_items bi ON t.ticket_id = bi.ticket_id
+      LEFT JOIN bookings b ON bi.booking_id = b.booking_id
       WHERE tt.event_id = $1
       GROUP BY tt.event_id, tt.category, tt.price, tt.max_quantity
       ORDER BY tt.price ASC
@@ -208,6 +214,7 @@ router.post('/', requireUserOrAdmin, async (req, res) => {
       end_date, 
       venue_id, 
       category_id,
+      cover_image,
       tickets = [] 
     } = req.body;
     
@@ -220,8 +227,8 @@ router.post('/', requireUserOrAdmin, async (req, res) => {
     
     // Create event
     const eventResult = await client.query(
-      'INSERT INTO events (organizer_id, venue_id, title, description, start_date, end_date, category_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [req.session.user.user_id, venue_id, title, description, start_date, end_date, category_id]
+      'INSERT INTO events (organizer_id, venue_id, title, description, start_date, end_date, category_id, cover_image) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [req.session.user.user_id, venue_id, title, description, start_date, end_date, category_id, cover_image || null]
     );
     
     const event = eventResult.rows[0];
@@ -230,13 +237,53 @@ router.post('/', requireUserOrAdmin, async (req, res) => {
     const createdTicketTypes = [];
     for (const ticket of tickets) {
       const ticketTypeResult = await client.query(
-        'INSERT INTO ticket_types (event_id, category, price) VALUES ($1, $2, $3) RETURNING *',
-        [event.event_id, ticket.category, ticket.price]
+        'INSERT INTO ticket_types (event_id, category, price, max_quantity) VALUES ($1, $2, $3, $4) RETURNING *',
+        [event.event_id, ticket.category, ticket.price, ticket.max_quantity || 100]
       );
       createdTicketTypes.push(ticketTypeResult.rows[0]);
     }
     
     await client.query('COMMIT');
+
+    // send event-creation confirmation email to the organizer (best-effort, won't block response)
+    try {
+      const organizerEmail = req.session?.user?.email || null;
+      if (organizerEmail) {
+        const startDate = new Date(event.start_date).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+        const endDate = new Date(event.end_date).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+        
+        emailService.sendEmail({
+          to: organizerEmail,
+          from: process.env.EMAIL_FROM || 'eventhub@gmail.com',
+          subject: `✅ Event Created: ${event.title}`,
+          text: `Hello ${req.session?.user?.name || ''},\n\nYour event "${event.title}" has been successfully created on EventHub!\n\nEvent Details:\n• Title: ${event.title}\n• Start: ${startDate}\n• End: ${endDate}\n• Status: ${event.status}\n• Ticket Types: ${createdTicketTypes.length}\n\nYour event is now live and attendees can start booking tickets.\n\nManage your event: [Event Dashboard Link]\n\nBest regards,\nThe EventHub Team`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #10B981;">✅ Event Successfully Created!</h2>
+              <p>Hello <strong>${req.session?.user?.name || ''}</strong>,</p>
+              <p>Your event <strong>"${event.title}"</strong> has been successfully created on EventHub!</p>
+              <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #4F46E5;">Event Details</h3>
+                <table style="width: 100%; line-height: 1.8;">
+                  <tr><td style="color: #6B7280;"><strong>Title:</strong></td><td>${event.title}</td></tr>
+                  <tr><td style="color: #6B7280;"><strong>Start:</strong></td><td>${startDate}</td></tr>
+                  <tr><td style="color: #6B7280;"><strong>End:</strong></td><td>${endDate}</td></tr>
+                  <tr><td style="color: #6B7280;"><strong>Status:</strong></td><td><span style="color: #10B981;">${event.status}</span></td></tr>
+                  <tr><td style="color: #6B7280;"><strong>Ticket Types:</strong></td><td>${createdTicketTypes.length}</td></tr>
+                </table>
+              </div>
+              <p style="background-color: #DBEAFE; padding: 15px; border-left: 4px solid #3B82F6; border-radius: 4px;">
+                <strong>📢 Your event is now live!</strong><br>
+                Attendees can start booking tickets right away.
+              </p>
+              <p style="margin-top: 30px;">Best regards,<br><strong>The EventHub Team</strong></p>
+            </div>
+          `
+        }).catch(err => console.error('Event creation email error:', err));
+      }
+    } catch (err) {
+      console.error('Event creation email handling error:', err);
+    }
     
     res.status(201).json({ 
       success: true, 
@@ -367,6 +414,118 @@ router.get('/:id/reviews', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch event reviews' 
+    });
+  }
+});
+
+// Update event - only organizer or admin can update
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      description,
+      start_date,
+      end_date,
+      venue_id,
+      category_id,
+      status,
+      cover_image
+    } = req.body;
+
+    // Check if event exists and user is the organizer or admin
+    const checkResult = await pool.query(
+      'SELECT organizer_id FROM events WHERE event_id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
+    }
+
+    const isOrganizer = checkResult.rows[0].organizer_id === req.session.user.user_id;
+    const isAdmin = req.session.user.role === 'admin';
+
+    if (!isOrganizer && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to update this event'
+      });
+    }
+
+    // Update event
+    const result = await pool.query(
+      `UPDATE events 
+       SET title = COALESCE($1, title),
+           description = COALESCE($2, description),
+           start_date = COALESCE($3, start_date),
+           end_date = COALESCE($4, end_date),
+           venue_id = COALESCE($5, venue_id),
+           category_id = COALESCE($6, category_id),
+           status = COALESCE($7, status),
+           cover_image = COALESCE($8, cover_image)
+       WHERE event_id = $9
+       RETURNING *`,
+      [title, description, start_date, end_date, venue_id, category_id, status, cover_image, id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Event updated successfully',
+      event: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update event error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update event'
+    });
+  }
+});
+
+// Delete event - only organizer or admin can delete
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if event exists and user is the organizer or admin
+    const checkResult = await pool.query(
+      'SELECT organizer_id FROM events WHERE event_id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
+    }
+
+    const isOrganizer = checkResult.rows[0].organizer_id === req.session.user.user_id;
+    const isAdmin = req.session.user.role === 'admin';
+
+    if (!isOrganizer && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete this event'
+      });
+    }
+
+    // Delete event (cascade will handle related records)
+    await pool.query('DELETE FROM events WHERE event_id = $1', [id]);
+
+    res.json({
+      success: true,
+      message: 'Event deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete event error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete event'
     });
   }
 });

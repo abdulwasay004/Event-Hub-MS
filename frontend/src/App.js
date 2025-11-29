@@ -24,6 +24,7 @@ import PaymentManagement from './pages/admin/PaymentManagement';
 // Organizer Pages
 import OrganizerDashboard from './pages/organizer/OrganizerDashboard';
 import CreateEvent from './pages/organizer/CreateEvent';
+import EditEvent from './pages/organizer/EditEvent';
 import RegisteredAttendees from './pages/organizer/RegisteredAttendees';
 
 // Protected Route Component
@@ -130,6 +131,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <CreateEvent />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/edit-event/:id"
+                element={
+                  <ProtectedRoute>
+                    <EditEvent />
                   </ProtectedRoute>
                 }
               />
