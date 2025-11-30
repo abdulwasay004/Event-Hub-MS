@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { eventsAPI } from '../../services/api';
+import { eventsAPI, refundsAPI } from '../../services/api';
 
 const EventManagement = () => {
   const [events, setEvents] = useState([]);
@@ -7,21 +7,84 @@ const EventManagement = () => {
   const [error, setError] = useState('');
   const [editingEvent, setEditingEvent] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [selectedEventForRefund, setSelectedEventForRefund] = useState(null);
+  const [refundStatus, setRefundStatus] = useState({});
+  const [initiatingRefund, setInitiatingRefund] = useState(false);
 
   useEffect(() => {
     fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const response = await eventsAPI.getAll();
-      setEvents(response.data.events);
+      // Fetch all events including completed and cancelled
+      const response = await eventsAPI.getAll({ status: '' });
+      // Sort events by start_date descending (newest first)
+      const sortedEvents = response.data.events.sort((a, b) => 
+        new Date(b.start_date) - new Date(a.start_date)
+      );
+      setEvents(sortedEvents);
+      
+      // Load refund status for all events
+      sortedEvents.forEach(event => {
+        checkRefundStatus(event.event_id);
+      });
     } catch (error) {
       setError('Failed to fetch events');
       console.error('Fetch events error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkRefundStatus = async (eventId) => {
+    try {
+      const response = await refundsAPI.getStatus(eventId);
+      if (response.data.success) {
+        setRefundStatus(prev => ({
+          ...prev,
+          [eventId]: response.data.data
+        }));
+      }
+    } catch (error) {
+      // Silently fail - refund status not critical
+      console.log('Refund status check skipped for event:', eventId);
+    }
+  };
+
+  const openRefundModal = (event) => {
+    setSelectedEventForRefund(event);
+    setRefundModalOpen(true);
+  };
+
+  const handleInitiateRefund = async () => {
+    if (!selectedEventForRefund) return;
+
+    try {
+      setInitiatingRefund(true);
+      const response = await refundsAPI.initiate(selectedEventForRefund.event_id);
+      
+      if (response.data.success) {
+        alert(`✅ Refund process initiated successfully!\n\n` +
+              `• Emails sent to ${response.data.data.totalAttendees} attendees\n` +
+              `• Total bookings: ${response.data.data.totalBookings}\n` +
+              `• Total refund amount: $${response.data.data.totalRefundAmount.toFixed(2)}\n\n` +
+              `Accounts team has been notified.`);
+        
+        setRefundModalOpen(false);
+        setSelectedEventForRefund(null);
+        
+        // Refresh refund status
+        checkRefundStatus(selectedEventForRefund.event_id);
+      }
+    } catch (error) {
+      console.error('Error initiating refund:', error);
+      alert(error.response?.data?.error || 'Failed to initiate refund process');
+    } finally {
+      setInitiatingRefund(false);
     }
   };
 
@@ -213,28 +276,42 @@ const EventManagement = () => {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          {editingEvent === event.event_id ? (
+                        <div className="flex flex-col space-y-2">
+                          <div className="flex space-x-2">
+                            {editingEvent === event.event_id ? (
+                              <button
+                                onClick={() => setEditingEvent(null)}
+                                className="text-gray-600 hover:text-gray-900"
+                              >
+                                Cancel
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setEditingEvent(event.event_id)}
+                                className="text-primary-600 hover:text-primary-900"
+                              >
+                                Edit Status
+                              </button>
+                            )}
                             <button
-                              onClick={() => setEditingEvent(null)}
-                              className="text-gray-600 hover:text-gray-900"
+                              onClick={() => setShowDeleteModal(event.event_id)}
+                              className="text-red-600 hover:text-red-900"
                             >
-                              Cancel
+                              Delete
                             </button>
+                          </div>
+                          {refundStatus[event.event_id]?.refund_initiated ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              ✓ Refund Initiated
+                            </span>
                           ) : (
                             <button
-                              onClick={() => setEditingEvent(event.event_id)}
-                              className="text-primary-600 hover:text-primary-900"
+                              onClick={() => openRefundModal(event)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                             >
-                              Edit Status
+                              💰 Initiate Refund
                             </button>
                           )}
-                          <button
-                            onClick={() => setShowDeleteModal(event.event_id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -248,7 +325,7 @@ const EventManagement = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Delete</h3>
             <p className="text-gray-600 mb-6">
@@ -266,6 +343,90 @@ const EventManagement = () => {
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Confirmation Modal */}
+      {refundModalOpen && selectedEventForRefund && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Initiate Refund Process</h2>
+            
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    <strong>Warning:</strong> You are about to initiate the refund process for:
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <h3 className="font-semibold text-lg text-gray-900 mb-2">{selectedEventForRefund.title}</h3>
+              <p className="text-sm text-gray-600">
+                <strong>Date:</strong> {new Date(selectedEventForRefund.start_date).toLocaleDateString()}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Venue:</strong> {selectedEventForRefund.venue_name}
+              </p>
+            </div>
+            
+            <div className="mb-4">
+              <p className="font-medium text-gray-900 mb-2">This will:</p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Send refund eligibility emails to all confirmed attendees
+                </li>
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Request bank account details from each attendee
+                </li>
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Notify the accounts department with attendee list
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> Attendees will need to reply to accounts@eventhub.com with their bank details for processing.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setRefundModalOpen(false);
+                  setSelectedEventForRefund(null);
+                }}
+                disabled={initiatingRefund}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInitiateRefund}
+                disabled={initiatingRefund}
+                className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {initiatingRefund ? 'Sending Emails...' : 'Confirm & Send Emails'}
               </button>
             </div>
           </div>

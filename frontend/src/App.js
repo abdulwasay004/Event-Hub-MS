@@ -19,7 +19,7 @@ import Profile from './pages/Profile';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
 import EventManagement from './pages/admin/EventManagement';
-import PaymentManagement from './pages/admin/PaymentManagement';
+import VenueManagement from './pages/admin/VenueManagement';
 
 // Organizer Pages
 import OrganizerDashboard from './pages/organizer/OrganizerDashboard';
@@ -109,10 +109,10 @@ function App() {
                 }
               />
               <Route
-                path="/admin/payments"
+                path="/admin/venues"
                 element={
                   <ProtectedRoute requiredRole="admin">
-                    <PaymentManagement />
+                    <VenueManagement />
                   </ProtectedRoute>
                 }
               />

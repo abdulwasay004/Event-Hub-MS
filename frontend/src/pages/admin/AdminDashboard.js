@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usersAPI, eventsAPI, paymentsAPI, reviewsAPI } from '../../services/api';
+import { usersAPI, eventsAPI } from '../../services/api';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     users: 0,
     events: 0,
-    bookings: 0,
-    revenue: 0
+    bookings: 0
   });
   const [recentUsers, setRecentUsers] = useState([]);
   const [recentEvents, setRecentEvents] = useState([]);
-  const [recentPayments, setRecentPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,29 +23,23 @@ const AdminDashboard = () => {
       setLoading(true);
       
       // Fetch all data in parallel
-      const [usersResponse, eventsResponse, paymentsResponse] = await Promise.all([
+      const [usersResponse, eventsResponse] = await Promise.all([
         usersAPI.getAll(),
-        eventsAPI.getAll(),
-        paymentsAPI.getAllAdmin({ limit: 10 })
+        eventsAPI.getAll()
       ]);
 
       // Calculate stats
       const users = usersResponse.data.users;
       const events = eventsResponse.data.events;
-      const payments = paymentsResponse.data.payments;
 
       setStats({
         users: users.length,
         events: events.length,
-        bookings: payments.length,
-        revenue: payments
-          .filter(p => p.payment_status === 'completed')
-          .reduce((sum, p) => sum + parseFloat(p.amount), 0)
+        bookings: 0 // Placeholder for bookings count if needed later
       });
 
       setRecentUsers(users.slice(0, 5));
       setRecentEvents(events.slice(0, 5));
-      setRecentPayments(payments.slice(0, 5));
 
     } catch (error) {
       setError('Failed to fetch dashboard data');
@@ -63,13 +55,6 @@ const AdminDashboard = () => {
       day: 'numeric',
       year: 'numeric'
     });
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
   };
 
   const getRoleColor = (role) => {
@@ -98,21 +83,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const getPaymentStatusColor = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'failed':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'refunded':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -136,7 +106,7 @@ const AdminDashboard = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="card">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -181,22 +151,6 @@ const AdminDashboard = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Bookings</p>
                 <p className="text-2xl font-semibold text-gray-900">{stats.bookings}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.revenue)}</p>
               </div>
             </div>
           </div>
@@ -267,75 +221,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Recent Payments */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Payments</h2>
-            <button 
-              onClick={() => navigate('/admin/payments')}
-              className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-            >
-              View All
-            </button>
-          </div>
 
-          {recentPayments.length === 0 ? (
-            <p className="text-gray-600">No payments found</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Event
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Attendee
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Method
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {recentPayments.map(payment => (
-                    <tr key={payment.payment_id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{payment.event_title}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{payment.attendee_name}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-green-600">{formatCurrency(payment.amount)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{payment.payment_method}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${getPaymentStatusColor(payment.payment_status)}`}>
-                          {payment.payment_status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(payment.payment_date)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
@@ -368,18 +254,19 @@ const AdminDashboard = () => {
           </div>
 
           <div className="card text-center">
-            <svg className="mx-auto h-12 w-12 text-yellow-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            <svg className="mx-auto h-12 w-12 text-purple-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Payment Management</h3>
-            <p className="text-gray-600 mb-4">Handle refunds, monitor transactions, and resolve payment issues</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Manage Venues</h3>
+            <p className="text-gray-600 mb-4">Add and manage event venues and locations</p>
             <button 
-              onClick={() => navigate('/admin/payments')}
+              onClick={() => navigate('/admin/venues')}
               className="btn-primary"
             >
-              Manage Payments
+              Manage Venues
             </button>
           </div>
+
         </div>
       </div>
     </div>

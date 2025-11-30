@@ -146,4 +146,10 @@ export const categoriesAPI = {
   getAll: () => api.get('/categories'),
 };
 
+// Refunds API
+export const refundsAPI = {
+  initiate: (eventId) => api.post(`/refunds/initiate/${eventId}`),
+  getStatus: (eventId) => api.get(`/refunds/status/${eventId}`)
+};
+
 export default api;

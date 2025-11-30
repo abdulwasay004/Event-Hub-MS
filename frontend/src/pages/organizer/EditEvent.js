@@ -57,19 +57,15 @@ const EditEvent = () => {
 
   const fetchVenuesAndCategories = async () => {
     try {
-      setVenues([
-        { venue_id: 1, name: 'Main Auditorium', location: 'Building A' },
-        { venue_id: 2, name: 'Conference Hall', location: 'Building B' },
-        { venue_id: 3, name: 'Outdoor Amphitheater', location: 'Campus Grounds' }
+      const { venuesAPI, categoriesAPI } = await import('../../services/api');
+      
+      const [venuesResponse, categoriesResponse] = await Promise.all([
+        venuesAPI.getAll(),
+        categoriesAPI.getAll()
       ]);
       
-      setCategories([
-        { category_id: 1, name: 'Technology' },
-        { category_id: 2, name: 'Business' },
-        { category_id: 3, name: 'Education' },
-        { category_id: 4, name: 'Entertainment' },
-        { category_id: 5, name: 'Sports' }
-      ]);
+      setVenues(venuesResponse.data.venues || []);
+      setCategories(categoriesResponse.data || []);
     } catch (error) {
       console.error('Error fetching venues and categories:', error);
     }
@@ -310,7 +306,7 @@ const EditEvent = () => {
                 <option value="">Select a venue</option>
                 {venues.map(venue => (
                   <option key={venue.venue_id} value={venue.venue_id}>
-                    {venue.name} - {venue.location}
+                    {venue.name} - {venue.city}
                   </option>
                 ))}
               </select>
