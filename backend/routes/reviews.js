@@ -4,20 +4,41 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get reviews for an event
+// Get reviews for an event (including reviews from past events by same organizer)
 router.get('/event/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
     
+    // First, get the organizer_id for this event
+    const eventResult = await pool.query(
+      'SELECT organizer_id FROM events WHERE event_id = $1',
+      [eventId]
+    );
+    
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Event not found' 
+      });
+    }
+    
+    const organizerId = eventResult.rows[0].organizer_id;
+    
+    // Get reviews for all past events by the same organizer
     const result = await pool.query(`
       SELECT 
         r.*,
-        u.name as reviewer_name
+        u.name as reviewer_name,
+        e.title as event_title,
+        CASE WHEN r.event_id = $1 THEN true ELSE false END as is_current_event
       FROM reviews r
       JOIN users u ON r.user_id = u.user_id
-      WHERE r.event_id = $1
-      ORDER BY r.review_date DESC
-    `, [eventId]);
+      JOIN events e ON r.event_id = e.event_id
+      WHERE e.organizer_id = $2 
+        AND e.end_date < NOW()
+        AND e.status = 'completed'
+      ORDER BY is_current_event DESC, r.review_date DESC
+    `, [eventId, organizerId]);
     
     res.json({ 
       success: true, 
@@ -114,11 +135,15 @@ router.post('/', requireAuth, async (req, res) => {
       });
     }
     
-    // Check if user has attended the event
-    const bookingCheck = await pool.query(
-      'SELECT booking_id FROM bookings WHERE user_id = $1 AND event_id = $2 AND status = $3',
-      [req.session.user.user_id, event_id, 'confirmed']
-    );
+    // Check if user has attended the event (join through booking_items and tickets)
+    const bookingCheck = await pool.query(`
+      SELECT b.booking_id 
+      FROM bookings b
+      JOIN booking_items bi ON b.booking_id = bi.booking_id
+      JOIN tickets t ON bi.ticket_id = t.ticket_id
+      WHERE b.user_id = $1 AND t.event_id = $2 AND b.status = $3
+      LIMIT 1
+    `, [req.session.user.user_id, event_id, 'confirmed']);
     
     if (bookingCheck.rows.length === 0) {
       return res.status(400).json({ 

@@ -3,6 +3,8 @@ const session = require('express-session');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const cron = require('node-cron');
+const pool = require('./config/database');
 
 // Load environment variables
 dotenv.config();
@@ -71,6 +73,37 @@ app.use('*', (req, res) => {
     message: 'Route not found' 
   });
 });
+
+// Auto-complete events when their end date has passed
+const autoCompleteEvents = async () => {
+  try {
+    const result = await pool.query(`
+      UPDATE events 
+      SET status = 'completed' 
+      WHERE end_date < NOW() 
+      AND status = 'active'
+      RETURNING event_id, title
+    `);
+    
+    if (result.rows.length > 0) {
+      console.log(`✅ Auto-completed ${result.rows.length} event(s):`);
+      result.rows.forEach(event => {
+        console.log(`   - Event #${event.event_id}: ${event.title}`);
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error auto-completing events:', error.message);
+  }
+};
+
+// Run auto-complete check every hour
+cron.schedule('0 * * * *', () => {
+  console.log('🔄 Running auto-complete check for events...');
+  autoCompleteEvents();
+});
+
+// Run once on startup
+autoCompleteEvents();
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

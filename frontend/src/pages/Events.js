@@ -18,7 +18,12 @@ const Events = () => {
     try {
       setLoading(true);
       const response = await eventsAPI.getAll();
-      setEvents(response.data.events || []);
+      const eventsWithRemainingTickets = (response.data.events || []).map(event => ({
+        ...event,
+        remaining_tickets: event.tickets ? 
+          event.tickets.reduce((sum, ticket) => sum + (ticket.available_quantity || 0), 0) : 0
+      }));
+      setEvents(eventsWithRemainingTickets);
     } catch (error) {
       setError('Failed to fetch events');
       console.error('Events fetch error:', error);

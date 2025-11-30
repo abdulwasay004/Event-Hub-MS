@@ -27,15 +27,51 @@ const EventManagement = () => {
 
   const handleStatusUpdate = async (eventId, newStatus) => {
     try {
-      // Note: You may need to add a status update endpoint to your API
-      // For now, we'll update locally
-      setEvents(events.map(event => 
-        event.event_id === eventId ? { ...event, status: newStatus } : event
+      // Fetch the full event details first
+      const response = await fetch(`http://localhost:5000/api/events/${eventId}`);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error('Failed to fetch event details');
+      }
+      
+      const event = data.event;
+      
+      // Update the event with new status
+      const updateResponse = await fetch(`http://localhost:5000/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: event.title,
+          description: event.description,
+          start_date: event.start_date,
+          end_date: event.end_date,
+          venue_id: event.venue_id,
+          category_id: event.category_id,
+          status: newStatus
+        })
+      });
+      
+      const updateData = await updateResponse.json();
+      
+      if (!updateData.success) {
+        throw new Error(updateData.message || 'Failed to update event status');
+      }
+      
+      // Update local state
+      setEvents(events.map(e => 
+        e.event_id === eventId ? { ...e, status: newStatus } : e
       ));
       setEditingEvent(null);
+      
+      alert('Event status updated successfully!');
     } catch (error) {
       setError('Failed to update event status');
       console.error('Update status error:', error);
+      alert('Failed to update event status: ' + error.message);
     }
   };
 

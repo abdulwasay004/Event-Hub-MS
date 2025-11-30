@@ -108,18 +108,19 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
       SELECT 
         p.*,
         b.booking_id,
-        b.quantity,
-        b.total_amount as booking_amount,
+        SUM(bi.quantity) as quantity,
+        SUM(bi.price_at_purchase * bi.quantity) as booking_amount,
         e.title as event_title,
         e.start_date,
-        t.category as ticket_category,
+        string_agg(DISTINCT t.category, ', ') as ticket_category,
         u.name as attendee_name,
         u.email as attendee_email,
         org.name as organizer_name
       FROM payments p
       JOIN bookings b ON p.booking_id = b.booking_id
-      JOIN events e ON b.event_id = e.event_id
-      JOIN tickets t ON b.ticket_id = t.ticket_id
+      JOIN booking_items bi ON b.booking_id = bi.booking_id
+      JOIN tickets t ON bi.ticket_id = t.ticket_id
+      JOIN events e ON t.event_id = e.event_id
       JOIN users u ON b.user_id = u.user_id
       JOIN users org ON e.organizer_id = org.user_id
     `;
@@ -129,7 +130,7 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
     let paramCount = 0;
     
     if (status) {
-      conditions.push(`p.payment_status = $${++paramCount}`);
+      conditions.push(`p.status = $${++paramCount}`);
       values.push(status);
     }
     
@@ -139,7 +140,7 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
     }
     
     if (event_id) {
-      conditions.push(`b.event_id = $${++paramCount}`);
+      conditions.push(`e.event_id = $${++paramCount}`);
       values.push(event_id);
     }
     
@@ -147,17 +148,23 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    query += ` ORDER BY p.payment_date DESC LIMIT $${++paramCount} OFFSET $${++paramCount}`;
+    query += ` 
+      GROUP BY p.payment_id, b.booking_id, e.title, e.start_date, u.name, u.email, org.name
+      ORDER BY p.payment_date DESC 
+      LIMIT $${++paramCount} OFFSET $${++paramCount}
+    `;
     values.push(limit, offset);
     
     const result = await pool.query(query, values);
     
     // Get total count
     let countQuery = `
-      SELECT COUNT(*) 
+      SELECT COUNT(DISTINCT p.payment_id) 
       FROM payments p
       JOIN bookings b ON p.booking_id = b.booking_id
-      JOIN events e ON b.event_id = e.event_id
+      JOIN booking_items bi ON b.booking_id = bi.booking_id
+      JOIN tickets t ON bi.ticket_id = t.ticket_id
+      JOIN events e ON t.event_id = e.event_id
     `;
     
     if (conditions.length > 0) {

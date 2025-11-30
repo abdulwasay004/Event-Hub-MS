@@ -15,6 +15,10 @@ const EventDetail = () => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState('Credit Card');
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
     fetchEventDetails();
@@ -40,6 +44,34 @@ const EventDetail = () => {
       setReviews(response.data.reviews);
     } catch (error) {
       console.error('Fetch reviews error:', error);
+    }
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      alert('Please login to submit a review');
+      return;
+    }
+
+    try {
+      setReviewSubmitting(true);
+      await reviewsAPI.create({
+        event_id: id,
+        rating: reviewRating,
+        comment: reviewComment.trim()
+      });
+      
+      alert('Review submitted successfully!');
+      setReviewComment('');
+      setReviewRating(5);
+      setShowReviewForm(false);
+      fetchReviews(); // Refresh reviews
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to submit review');
+      console.error('Submit review error:', error);
+    } finally {
+      setReviewSubmitting(false);
     }
   };
 
@@ -186,11 +218,79 @@ const EventDetail = () => {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-3">About This Event</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{event.description}</p>
+            {/* Reviews Section */}
+            <div className="card" id="reviews">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Reviews</h2>
+                {isAuthenticated && event && new Date(event.end_date) < new Date() && (
+                  <button
+                    onClick={() => setShowReviewForm(!showReviewForm)}
+                    className="btn-primary text-sm"
+                  >
+                    {showReviewForm ? 'Cancel' : 'Write a Review'}
+                  </button>
+                )}
               </div>
+
+              {/* Review Form */}
+              {showReviewForm && (
+                <form onSubmit={handleSubmitReview} className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Share Your Experience</h3>
+                  
+                  <div className="mb-4">
+                    <label className="form-label">Rating</label>
+                    <div className="flex items-center space-x-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setReviewRating(star)}
+                          className="focus:outline-none transition-colors"
+                        >
+                          <svg
+                            className={`w-8 h-8 ${star <= reviewRating ? 'text-yellow-500' : 'text-gray-300'} hover:text-yellow-400`}
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                          </svg>
+                        </button>
+                      ))}
+                      <span className="ml-2 text-gray-600">{reviewRating} star{reviewRating !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="form-label">Your Review (Optional)</label>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      className="form-input"
+                      rows="4"
+                      placeholder="Share your thoughts about this event..."
+                    ></textarea>
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      type="submit"
+                      disabled={reviewSubmitting}
+                      className="btn-primary"
+                    >
+                      {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewForm(false)}
+                      className="btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {event.avg_rating > 0 && (
                 <div className="flex items-center mb-6">
@@ -215,7 +315,12 @@ const EventDetail = () => {
 
             {/* Reviews Section */}
             <div className="card">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Reviews</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Reviews from Organizer's Events
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Reviews from attendees of this and other past events by the same organizer
+              </p>
               {reviews.length === 0 ? (
                 <p className="text-gray-600">No reviews yet.</p>
               ) : (
@@ -223,7 +328,7 @@ const EventDetail = () => {
                   {reviews.map(review => (
                     <div key={review.review_id} className="border-b border-gray-200 pb-4 last:border-b-0">
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
+                        <div className="flex items-center flex-wrap">
                           <span className="font-medium text-gray-900">{review.reviewer_name}</span>
                           <div className="flex items-center ml-2">
                             {[...Array(5)].map((_, i) => (
@@ -237,6 +342,11 @@ const EventDetail = () => {
                               </svg>
                             ))}
                           </div>
+                          {!review.is_current_event && review.event_title && (
+                            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              From: {review.event_title}
+                            </span>
+                          )}
                         </div>
                         <span className="text-sm text-gray-500">{formatReviewDate(review.review_date)}</span>
                       </div>

@@ -144,7 +144,30 @@ const Bookings = () => {
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                         </svg>
-                        <span>{booking.quantity}x {booking.ticket_category} - ${booking.ticket_price} each</span>
+                        <span>
+                          {booking.items && booking.items.length > 0 ? (
+                            (() => {
+                              // Group tickets by category
+                              const grouped = booking.items.reduce((acc, item) => {
+                                const key = `${item.category}-${item.price}`;
+                                if (!acc[key]) {
+                                  acc[key] = { category: item.category, price: item.price, quantity: 0 };
+                                }
+                                acc[key].quantity += item.quantity;
+                                return acc;
+                              }, {});
+                              
+                              return Object.values(grouped).map((group, idx, arr) => (
+                                <span key={idx}>
+                                  {group.quantity}x {group.category} - ${parseFloat(group.price).toFixed(2)} each
+                                  {idx < arr.length - 1 ? ', ' : ''}
+                                </span>
+                              ));
+                            })()
+                          ) : (
+                            'No ticket details'
+                          )}
+                        </span>
                       </div>
                       <div className="flex items-center">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,21 +200,28 @@ const Bookings = () => {
                       <div className="text-sm text-gray-500">Total Amount</div>
                     </div>
                     
-                    <div className="flex space-x-3">
-                      <Link
-                        to={`/events/${booking.event_id}`}
-                        className="btn-secondary"
-                      >
-                        View Event
-                      </Link>
-                      {canCancelBooking(booking) && (
-                        <button
-                          onClick={() => handleCancelBooking(booking.booking_id)}
-                          className="btn-danger"
-                        >
-                          Cancel
-                        </button>
+                    <div className="flex flex-col space-y-2">
+                      {new Date(booking.end_date) < new Date() && (
+                        <div className="text-sm font-medium text-gray-600 mb-2">
+                          ✓ Event Completed
+                        </div>
                       )}
+                      <div className="flex space-x-3">
+                        <Link
+                          to={`/events/${booking.event_id}`}
+                          className="btn-secondary"
+                        >
+                          View Event
+                        </Link>
+                        {new Date(booking.end_date) < new Date() && (
+                          <Link
+                            to={`/events/${booking.event_id}#reviews`}
+                            className="btn-primary"
+                          >
+                            Write Review
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
