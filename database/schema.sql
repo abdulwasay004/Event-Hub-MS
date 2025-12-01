@@ -86,6 +86,7 @@ CREATE TABLE events (
     end_date TIMESTAMP NOT NULL,
     category_id INTEGER NOT NULL REFERENCES categories(category_id) ON DELETE RESTRICT,
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'completed')),
+    cover_image TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     CONSTRAINT chk_event_dates CHECK (end_date > start_date),

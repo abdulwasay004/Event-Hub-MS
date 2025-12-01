@@ -23,6 +23,7 @@ const venueRoutes = require('./routes/venues');
 const paymentRoutes = require('./routes/payments');
 const notificationRoutes = require('./routes/notifications');
 const organizerRoutes = require('./routes/organizer');
+const categoryRoutes = require('./routes/categories');
 
 // Middleware
 app.use(cors({
@@ -55,6 +56,7 @@ app.use('/api/venues', venueRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/organizer', organizerRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

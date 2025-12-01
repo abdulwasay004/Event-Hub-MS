@@ -20,30 +20,30 @@ INSERT INTO categories (name, description) VALUES
 
 -- Users (password: 'password123' for all)
 INSERT INTO users (name, email, password, phone, role) VALUES 
-('Admin User', 'admin@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567890', 'admin'),
-('Test User', 'user@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567891', 'user'),
-('John Smith', 'john@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567892', 'user'),
-('Sarah Johnson', 'sarah@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567893', 'user'),
-('Mike Wilson', 'mike@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567894', 'user'),
-('Alice Smith', 'alice@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567895', 'user'),
-('Bob Johnson', 'bob@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567896', 'user'),
-('Emma Wilson', 'emma@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+1234567897', 'user');
+('Admin User', 'admin@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234567', 'admin'),
+('Ali Ahmed', 'ali.ahmed@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234568', 'user'),
+('Fatima Khan', 'fatima.khan@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234569', 'user'),
+('Hassan Malik', 'hassan.malik@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234570', 'user'),
+('Ayesha Siddiqui', 'ayesha.siddiqui@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234571', 'user'),
+('Bilal Hussain', 'bilal.hussain@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234572', 'user'),
+('Zainab Ali', 'zainab.ali@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234573', 'user'),
+('Usman Sheikh', 'usman.sheikh@example.com', '$2b$10$rr2gz/EaevroR2G3w007F.hn9qtBDN2E9gdIdGg4GFA0539SPDm3C', '+923001234574', 'user');
 
 -- Venues
 INSERT INTO venues (name, address, city, capacity, contact_info) VALUES 
-('Grand Convention Center', '123 Main St', 'New York', 5000, 'info@grandconvention.com'),
-('Tech Hub Auditorium', '456 Innovation Ave', 'San Francisco', 1500, 'events@techhub.com'),
-('Downtown Music Hall', '789 Broadway', 'Nashville', 3000, 'bookings@musichall.com'),
-('Sports Arena Complex', '321 Stadium Blvd', 'Chicago', 10000, 'events@sportarena.com'),
-('Cultural Arts Center', '654 Arts District', 'Los Angeles', 800, 'info@culturalarts.com'),
-('Business Conference Center', '987 Corporate Way', 'Boston', 2000, 'meetings@bizconf.com');
+('Grand Convention Center', 'Teen Talwar', 'Karachi', 5000, 'info@grandconvention.com'),
+('Tech Hub Auditorium', 'Shaheen complex', 'Karachi', 1500, 'events@techhub.com'),
+('Downtown Music Hall', 'Tariq road', 'Karachi', 3000, 'bookings@musichall.com'),
+('Sports Arena Complex', 'Millinium mall', 'Karachi', 10000, 'events@sportarena.com'),
+('Cultural Arts Center', 'Bahria Town', 'Rawalpindi', 800, 'info@culturalarts.com'),
+('Business Conference Center', 'Sector -14A', 'Islamabad', 2000, 'meetings@bizconf.com');
 
 -- Events
 INSERT INTO events (organizer_id, venue_id, title, description, start_date, end_date, category_id, status) VALUES 
-(2, 1, 'Summer Music Festival 2025', 'A fantastic outdoor music festival', '2025-11-15 14:00:00', '2025-11-15 23:00:00', 1, 'active'),
-(3, 2, 'JavaScript Conference 2025', 'Learn the latest in JavaScript development', '2025-11-20 09:00:00', '2025-11-20 17:00:00', 2, 'active'),
-(4, 3, 'City Marathon 2025', 'Annual city marathon race', '2025-12-01 07:00:00', '2025-12-01 12:00:00', 3, 'active'),
-(5, 4, 'Food & Wine Festival', 'Taste the finest local cuisine', '2025-12-15 12:00:00', '2025-12-15 22:00:00', 4, 'active');
+(2, 1, 'Summer Music Festival 2025', 'A fantastic outdoor music festival', '2025-12-20 14:00:00', '2025-12-20 23:00:00', 1, 'active'),
+(3, 2, 'JavaScript Conference 2025', 'Learn the latest in JavaScript development', '2025-12-25 09:00:00', '2025-12-25 17:00:00', 2, 'active'),
+(4, 3, 'City Marathon 2025', 'Annual city marathon race', '2026-01-10 07:00:00', '2026-01-10 12:00:00', 3, 'active'),
+(5, 4, 'Food & Wine Festival', 'Taste the finest local cuisine', '2026-01-15 12:00:00', '2026-01-15 22:00:00', 4, 'active');
 
 -- ============================================================================
 -- TICKET TYPES - Define pricing tiers for each event

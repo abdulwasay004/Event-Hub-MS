@@ -56,14 +56,6 @@ const CreateEvent = () => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file size (max 2MB)
-      const maxSize = 2 * 1024 * 1024; // 2MB in bytes
-      if (file.size > maxSize) {
-        setError('Image size must be less than 2MB');
-        e.target.value = null;
-        return;
-      }
-
       // Validate file type
       const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       if (!validTypes.includes(file.type)) {
@@ -265,7 +257,7 @@ const CreateEvent = () => {
               {/* Cover Image Upload */}
               <div>
                 <label htmlFor="cover-image" className="block text-sm font-medium text-gray-700 mb-2">
-                  Cover Image (Max 2MB)
+                  Cover Image
                 </label>
                 <div className="mt-1">
                   {imagePreview ? (
@@ -318,7 +310,7 @@ const CreateEvent = () => {
                           </label>
                           <p className="pl-1">or drag and drop</p>
                         </div>
-                        <p className="text-xs text-gray-500">PNG, JPG, WEBP up to 2MB</p>
+                        <p className="text-xs text-gray-500">PNG, JPG, WEBP</p>
                       </div>
                     </div>
                   )}

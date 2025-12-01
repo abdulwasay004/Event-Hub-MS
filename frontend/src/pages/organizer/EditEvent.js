@@ -88,13 +88,6 @@ const EditEvent = () => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const maxSize = 2 * 1024 * 1024;
-      if (file.size > maxSize) {
-        setError('Image size must be less than 2MB');
-        e.target.value = null;
-        return;
-      }
-
       const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       if (!validTypes.includes(file.type)) {
         setError('Please upload a valid image file (JPEG, PNG, or WebP)');
@@ -250,7 +243,7 @@ const EditEvent = () => {
                       </label>
                       <p className="pl-1">or drag and drop</p>
                     </div>
-                    <p className="text-xs text-gray-500">PNG, JPG, WebP up to 2MB</p>
+                    <p className="text-xs text-gray-500">PNG, JPG, WebP</p>
                   </div>
                 </div>
               )}
